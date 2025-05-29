@@ -1,0 +1,12 @@
+all:
+  hosts:
+    vm1:
+      ansible_host: "{{ cloudflare_subdomain_1_ssh }}"
+    vm2:
+      ansible_host: "{{ cloudflare_subdomain_2_ssh }}"
+  vars:
+    ansible_user: "{{ aws_server_username }}"
+    ansible_ssh_private_key_file: "/builds/saucyragu/core-doom-demo/outputs/sshkey" 
+    ansible_ssh_port: 22
+    ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+    WEB_DOMAIN: "{{ cloudflare_subdomain_3_web }}"

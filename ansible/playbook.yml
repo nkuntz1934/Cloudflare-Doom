@@ -1,0 +1,85 @@
+- name: Configure AWS instance (Ubuntu 22.04 specific)
+  hosts: all
+  become: yes
+  become_method: sudo
+
+  tasks:
+    # Baseline Package Install
+    - name: Install baseline packages
+      apt:
+        pkg:
+          - curl
+          - gnupg
+          - lsb-release
+        update_cache: yes
+        state: present
+
+    # Test network connectivity
+    - name: Test connectivity to get.docker.com
+      ansible.builtin.shell: curl -fsSL https://get.docker.com
+      register: curl_result
+
+    # Install Docker using official script
+    - name: Install Docker using official script
+      ansible.builtin.shell: |
+        curl -fsSL https://get.docker.com -o get-docker.sh
+        chmod +x get-docker.sh
+        ./get-docker.sh
+      args:
+        creates: /usr/bin/docker
+      register: docker_script_result
+
+    # Install docker-compose-plugin
+    - name: Install docker-compose-plugin
+      ansible.builtin.apt:
+        pkg:
+          - docker-compose-plugin
+        state: present
+        update_cache: yes
+      register: compose_plugin_result
+
+    # NGINX Config Staging (for Docker volume)
+    - name: Ensure /nginx directory exists on host
+      ansible.builtin.file:
+        path: /nginx
+        state: directory
+        mode: '0755'
+    - name: Copy NGINX configuration to /nginx
+      ansible.builtin.copy:
+        src: misc/nginx/custom.conf
+        dest: /nginx/custom.conf
+        mode: '0644'
+    - name: Replace WEB_DOMAIN placeholder in NGINX config
+      ansible.builtin.replace:
+        path: /nginx/custom.conf
+        regexp: 'WEB_DOMAIN'
+        replace: '{{ WEB_DOMAIN }}'
+    - name: Create server.crt on server
+      ansible.builtin.copy:
+        content: "{{ cloudflare_web_cert }}"
+        dest: /nginx/server.crt
+        mode: '0644'
+    - name: Create server.key on server
+      ansible.builtin.copy:
+        content: "{{ cloudflare_web_key }}"
+        dest: /nginx/server.key
+        mode: '0600'
+
+    # Docker Compose Staging and Running
+    - name: Ensure /root/docker directory exists on host
+      ansible.builtin.file:
+        path: /root/docker
+        state: directory
+        mode: '0755'
+    - name: Stage docker directory on server
+      ansible.builtin.copy:
+        src: docker/
+        dest: /root/docker/
+        mode: '0644'
+      register: docker_copy_result
+
+    - name: Run Docker Compose
+      ansible.builtin.shell: docker compose up -d
+      args:
+        chdir: /root/docker/
+      register: docker_compose_result
